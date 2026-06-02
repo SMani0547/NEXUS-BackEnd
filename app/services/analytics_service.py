@@ -121,6 +121,108 @@ class AnalyticsService:
             "summary": self.summary(),
         }
 
+    def data_rows(self, type_filter: str | None = None, country: str | None = None, product: str | None = None, year_min: int | None = None, year_max: int | None = None) -> list[dict[str, Any]]:
+        df = self.data
+        if type_filter and type_filter.casefold() != "all":
+            df = df[df["type"].str.casefold() == type_filter.casefold()]
+        if country and country.casefold() != "all":
+            df = df[df["country"].str.casefold() == country.casefold()]
+        if product and product.casefold() != "all":
+            df = df[df["product"].str.casefold() == product.casefold()]
+        if year_min is not None:
+            df = df[df["year"] >= year_min]
+        if year_max is not None:
+            df = df[df["year"] <= year_max]
+            
+        return self._records(df)
+
+    def heatmap(self) -> dict[str, Any]:
+        countries = self._sorted_unique("country")[:10]
+        products = self._sorted_unique("product")[:10]
+        
+        cells = []
+        for c in countries:
+            for p in products:
+                subset = self.data[(self.data["country"] == c) & (self.data["product"] == p)]
+                avg_yield = float(subset["yield"].mean()) if not subset.empty else None
+                record_count = len(subset)
+                cells.append({
+                    "country": c,
+                    "product": p,
+                    "avg_yield": avg_yield,
+                    "record_count": record_count
+                })
+        return {
+            "countries": countries,
+            "products": products,
+            "cells": cells
+        }
+
+    def insights(self, product: str, year_min: int | None = None, year_max: int | None = None) -> dict[str, Any]:
+        df = self.data
+        if year_min is not None:
+            df = df[df["year"] >= year_min]
+        if year_max is not None:
+            df = df[df["year"] <= year_max]
+            
+        prod_df = df[df["product"].str.casefold() == product.casefold()] if product else df
+        
+        # Highest Yield Country
+        highest_country = {"label": "Highest Yield Country", "value": "—", "sub": "0 avg"}
+        if not prod_df.empty:
+            avg_yields = prod_df.groupby("country")["yield"].mean()
+            if not avg_yields.empty:
+                top_c = avg_yields.idxmax()
+                top_v = avg_yields.max()
+                highest_country = {"label": "Highest Yield Country", "value": top_c, "sub": f"{round(top_v)} avg"}
+
+        # Fastest Growing & Largest Decline
+        fastest = {"label": "Fastest Growing Product", "value": "—", "sub": "0% over period"}
+        decliner = {"label": "Largest Decline", "value": "—", "sub": "0%"}
+        
+        if year_min is not None and year_max is not None:
+            fastest_pct = -1000
+            decline_pct = 1000
+            fastest_p = "—"
+            decliner_p = "—"
+            
+            for p in self.products():
+                p_df = self.data[self.data["product"] == p]
+                start = p_df[p_df["year"] == year_min]
+                end = p_df[p_df["year"] == year_max]
+                if not start.empty and not end.empty:
+                    s = start["yield"].mean()
+                    e = end["yield"].mean()
+                    if s > 0:
+                        pct = ((e - s) / s) * 100
+                        if pct > fastest_pct:
+                            fastest_pct = pct
+                            fastest_p = p
+                        if pct < decline_pct:
+                            decline_pct = pct
+                            decliner_p = p
+                            
+            if fastest_p != "—":
+                fastest = {"label": "Fastest Growing Product", "value": fastest_p, "sub": f"+{fastest_pct:.1f}% over period"}
+            if decliner_p != "—":
+                decliner = {"label": "Largest Decline", "value": decliner_p, "sub": f"{decline_pct:.1f}%"}
+
+        # Most reported
+        most_reported = {"label": "Most Reported Product", "value": "—", "sub": "0 records"}
+        if not self.data.empty:
+            counts = self.data["product"].value_counts()
+            if not counts.empty:
+                top_p = counts.idxmax()
+                top_c = counts.max()
+                most_reported = {"label": "Most Reported Product", "value": str(top_p), "sub": f"{top_c} records"}
+
+        return {
+            "highest_yield_country": highest_country,
+            "fastest_growing_product": fastest,
+            "largest_decline_product": decliner,
+            "most_reported_product": most_reported
+        }
+
     def _trend_summaries(self, data: pd.DataFrame) -> list[dict[str, Any]]:
         summaries: list[dict[str, Any]] = []
         for (product, product_type), rows in data.groupby(["product", "type"]):

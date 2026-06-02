@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXUS Backend Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0b1120;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --border-color: rgba(255, 255, 255, 0.1);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --primary: #38bdf8;
+            --primary-glow: rgba(56, 189, 248, 0.4);
+            --teal: #2dd4bf;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+            background: radial-gradient(circle at top left, #1e1b4b, #0f172a 40%, #020617 100%);
+        }
+
+        /* Animated background elements */
+        .blob {
+            position: absolute;
+            filter: blur(80px);
+            z-index: -1;
+            opacity: 0.5;
+            animation: float 10s infinite ease-in-out alternate;
+        }
+        .blob-1 { top: -10%; left: -10%; width: 400px; height: 400px; background: #312e81; }
+        .blob-2 { bottom: -10%; right: -10%; width: 500px; height: 500px; background: #064e3b; animation-delay: -5s; }
+
+        @keyframes float {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(30px, 50px) scale(1.1); }
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 3rem 1.5rem;
+            width: 100%;
+        }
+
+        header {
+            margin-bottom: 3rem;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 3rem;
+            font-weight: 700;
+            background: linear-gradient(to right, var(--primary), var(--teal));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+
+        p.subtitle {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+        }
+
+        .glass-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            border-radius: 1rem;
+            padding: 2rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            margin-bottom: 2rem;
+            animation: slideUp 0.6s ease-out forwards;
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        @keyframes slideUp {
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .endpoints-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .endpoint {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .endpoint:hover {
+            border-color: var(--primary);
+            box-shadow: 0 0 15px var(--primary-glow);
+            transform: translateY(-2px);
+        }
+
+        .endpoint h3 {
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+            color: var(--primary);
+        }
+
+        .endpoint code {
+            font-family: monospace;
+            background: rgba(0,0,0,0.3);
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.3rem;
+            font-size: 0.85rem;
+            color: var(--teal);
+        }
+
+        /* Table Styles */
+        .table-container {
+            overflow-x: auto;
+            margin-top: 1.5rem;
+            border-radius: 0.5rem;
+            border: 1px solid var(--border-color);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        th, td {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background: rgba(0, 0, 0, 0.2);
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+            position: sticky;
+            top: 0;
+        }
+
+        tr:hover td {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        button {
+            background: linear-gradient(135deg, var(--primary), #0284c7);
+            color: white;
+            border: none;
+            padding: 0.6rem 1.2rem;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 14px var(--primary-glow);
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px var(--primary-glow);
+            background: linear-gradient(135deg, #38bdf8, #0369a1);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .loader {
+            border: 3px solid rgba(255,255,255,0.1);
+            border-top: 3px solid var(--primary);
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            vertical-align: middle;
+            margin-left: 10px;
+        }
+
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .type-badge {
+            padding: 0.2rem 0.5rem;
+            border-radius: 1rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .type-crop { background: rgba(45, 212, 191, 0.2); color: var(--teal); }
+        .type-livestock { background: rgba(244, 63, 94, 0.2); color: #fb7185; }
+
+    </style>
+</head>
+<body>
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+
+    <div class="container">
+        <header>
+            <h1>NEXUS Backend</h1>
+            <p class="subtitle">API Overview & Data Explorer</p>
+        </header>
+
+        <div class="glass-card" style="animation-delay: 0.1s">
+            <h2 style="margin-bottom: 1rem;">Available Endpoints</h2>
+            <p style="color: var(--text-muted); font-size: 0.9rem;">The following REST APIs are exposed for the frontend application.</p>
+            <h3 style="color: var(--primary); margin-top: 1.5rem; margin-bottom: 0.5rem; font-size: 1.2rem;">Frontend UI Endpoints (11)</h3>
+            <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">These endpoints are actively called by the React frontend to render charts and components.</p>
+            <div class="endpoints-grid">
+                <div class="endpoint">
+                    <h3>Summary Stats</h3>
+                    <code>GET /api/summary</code>
+                </div>
+                <div class="endpoint">
+                    <h3>Data Rows</h3>
+                    <code>GET /api/data</code>
+                </div>
+                <div class="endpoint">
+                    <h3>Data Export (CSV)</h3>
+                    <code>GET /api/data/export</code>
+                </div>
+                <div class="endpoint">
+                    <h3>Countries List</h3>
+                    <code>GET /api/countries</code>
+                </div>
+                <div class="endpoint">
+                    <h3>Filter Options</h3>
+                    <code>GET /api/filters</code>
+                </div>
+                <div class="endpoint">
+                    <h3>Trend Series</h3>
+                    <code>GET /api/trends</code>
+                </div>
+                <div class="endpoint">
+                    <h3>Comparison</h3>
+                    <code>GET /api/comparison</code>
+                </div>
+                <div class="endpoint">
+                    <h3>Country Profile</h3>
+                    <code>GET /api/country-profile</code>
+                </div>
+                <div class="endpoint">
+                    <h3>Heatmap Matrix</h3>
+                    <code>GET /api/heatmap</code>
+                </div>
+                <div class="endpoint">
+                    <h3>AI Insights</h3>
+                    <code>GET /api/insights</code>
+                </div>
+                <div class="endpoint">
+                    <h3>Ask AI (Q&A)</h3>
+                    <code>POST /api/ask</code>
+                </div>
+            </div>
+
+            <h3 style="color: var(--teal); margin-top: 2.5rem; margin-bottom: 0.5rem; font-size: 1.2rem;">Backend Utility Endpoints (2)</h3>
+            <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">These endpoints are available for infrastructure and other integrations, but not directly used by the UI.</p>
+            <div class="endpoints-grid">
+                <div class="endpoint">
+                    <h3 style="color: var(--teal);">Health Check</h3>
+                    <code style="color: var(--text-main);">GET /api/health</code>
+                </div>
+                <div class="endpoint">
+                    <h3 style="color: var(--teal);">Products List</h3>
+                    <code style="color: var(--text-main);">GET /api/products</code>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-card" style="animation-delay: 0.2s">
+            <div class="controls">
+                <h2>Dataset Preview</h2>
+                <div>
+                    <span id="record-count" style="color: var(--text-muted); margin-right: 1rem; font-size: 0.9rem;"></span>
+                    <button id="load-btn" onclick="fetchData()">Load Data</button>
+                    <div id="loading" class="loader" style="display: none;"></div>
+                </div>
+            </div>
+            
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Country</th>
+                            <th>Product</th>
+                            <th>Type</th>
+                            <th>Year</th>
+                            <th>Yield</th>
+                            <th>Unit</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body">
+                        <tr>
+                            <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+                                Click "Load Data" to fetch rows from the backend.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem;">
+                <button id="prev-btn" onclick="changePage(-1)" disabled>Previous</button>
+                <span id="page-info" style="font-size: 0.9rem; color: var(--text-muted);">Page 1</span>
+                <button id="next-btn" onclick="changePage(1)" disabled>Next</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allData = [];
+        let currentPage = 1;
+        const rowsPerPage = 15;
+
+        async function fetchData() {
+            const btn = document.getElementById('load-btn');
+            const loader = document.getElementById('loading');
+            const tbody = document.getElementById('table-body');
+            
+            btn.disabled = true;
+            loader.style.display = 'inline-block';
+            
+            try {
+                const response = await fetch('/api/data?year_max=2024'); // Fetch recent data to avoid huge payloads if not needed, or all.
+                const json = await response.json();
+                allData = json.rows;
+                
+                document.getElementById('record-count').innerText = `${json.total.toLocaleString()} total records`;
+                
+                currentPage = 1;
+                renderTable();
+            } catch (error) {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #ef4444;">Error loading data: ${error.message}</td></tr>`;
+            } finally {
+                btn.disabled = false;
+                loader.style.display = 'none';
+            }
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('table-body');
+            tbody.innerHTML = '';
+            
+            const start = (currentPage - 1) * rowsPerPage;
+            const end = start + rowsPerPage;
+            const pageData = allData.slice(start, end);
+            
+            if (pageData.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted);">No data available.</td></tr>`;
+                return;
+            }
+
+            pageData.forEach(row => {
+                const tr = document.createElement('tr');
+                const typeClass = row.type.toLowerCase() === 'crop' ? 'type-crop' : 'type-livestock';
+                
+                tr.innerHTML = `
+                    <td>${row.country}</td>
+                    <td>${row.product}</td>
+                    <td><span class="type-badge ${typeClass}">${row.type}</span></td>
+                    <td>${row.year}</td>
+                    <td style="font-weight: 600; color: var(--teal);">${row.yield.toLocaleString()}</td>
+                    <td><span style="font-size: 0.8rem; color: var(--text-muted);">${row.unit}</span></td>
+                `;
+                tbody.appendChild(tr);
+            });
+            
+            // Update pagination
+            document.getElementById('page-info').innerText = `Page ${currentPage} of ${Math.ceil(allData.length / rowsPerPage)}`;
+            document.getElementById('prev-btn').disabled = currentPage === 1;
+            document.getElementById('next-btn').disabled = end >= allData.length;
+        }
+
+        function changePage(delta) {
+            currentPage += delta;
+            renderTable();
+        }
+    </script>
+</body>
+</html>

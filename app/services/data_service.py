@@ -53,24 +53,60 @@ class DataService:
         frame["source_file"] = path.name
         return frame
 
+    # Priority 1 columns — these have the actual data values we want
+    _LABEL_COLS: dict[str, str] = {
+        "pacific_island_countries_and_territories": "country",
+        "agricultural_product": "product",
+        "agricultural_production_type": "type",
+        "time_period": "year",       # TIME_PERIOD has real years; 'Time' label col is NaN
+        "obs_value": "yield",        # OBS_VALUE has real numbers; 'Observation value' label col is NaN
+        "unit_measure": "unit",      # UNIT_MEASURE has real units; 'Unit of measure' label col is NaN
+    }
+    _CODE_COLS: dict[str, str] = {
+        "country": "country", "area": "country", "location": "country",
+        "island": "country", "territory": "country", "geo_pict": "country",
+        "product": "product", "item": "product", "commodity": "product",
+        "crop": "product", "livestock": "product",
+        "agriculture_production_item": "product",
+        "type": "type", "category": "type", "product_type": "type",
+        "dataset": "type", "domain": "type", "agriculture_production_type": "type",
+        "year": "year", "time": "year", "period": "year",
+        "yield": "yield", "value": "yield", "yield_value": "yield",
+        "measure": "yield", "amount": "yield", "observation_value": "yield",
+        "unit": "unit", "units": "unit", "unit_of_measure": "unit",
+        "uom": "unit",
+    }
+
     def _normalize_columns(self, frame: pd.DataFrame) -> pd.DataFrame:
         rename_map: dict[str, str] = {}
-        for column in frame.columns:
-            normalized = self._normalize_name(column)
-            if normalized in {"country", "area", "location", "island", "territory"}:
-                rename_map[column] = "country"
-            elif normalized in {"product", "item", "commodity", "crop", "livestock"}:
-                rename_map[column] = "product"
-            elif normalized in {"type", "category", "product_type", "dataset", "domain"}:
-                rename_map[column] = "type"
-            elif normalized in {"year", "time_period", "period"}:
-                rename_map[column] = "year"
-            elif normalized in {"yield", "value", "yield_value", "measure", "amount"}:
-                rename_map[column] = "yield"
-            elif normalized in {"unit", "units", "unit_of_measure", "uom"}:
-                rename_map[column] = "unit"
+        # Pre-claim standard columns already in the frame (no rename needed)
+        claimed: set[str] = set(frame.columns) & set(STANDARD_COLUMNS)
 
-        return frame.rename(columns=rename_map)
+        # Pass 1 — label columns (higher priority)
+        for column in frame.columns:
+            if column in claimed:
+                continue
+            normalized = self._normalize_name(column)
+            target = self._LABEL_COLS.get(normalized)
+            if target and target not in claimed:
+                rename_map[column] = target
+                claimed.add(target)
+
+        # Pass 2 — code / generic columns (fill remaining unclaimed slots)
+        for column in frame.columns:
+            if column in claimed or column in rename_map:
+                continue
+            normalized = self._normalize_name(column)
+            target = self._CODE_COLS.get(normalized)
+            if target and target not in claimed:
+                rename_map[column] = target
+                claimed.add(target)
+
+        frame = frame.rename(columns=rename_map)
+        # Drop unrecognised columns, keep only standard ones
+        keep = set(STANDARD_COLUMNS)
+        drop_cols = [c for c in frame.columns if c not in keep]
+        return frame.drop(columns=drop_cols, errors="ignore")
 
     def _clean_rows(self, frame: pd.DataFrame) -> pd.DataFrame:
         missing = {"country", "product", "year", "yield"} - set(frame.columns)
@@ -83,7 +119,7 @@ class DataService:
         else:
             clean["type"] = clean["type"].fillna("").astype(str)
             clean["type"] = clean.apply(
-                lambda row: row["type"] or self._infer_type_from_text(row["source_file"]),
+                lambda row: row["type"] if str(row["type"]).strip() else self._infer_type_from_text(row["source_file"]),
                 axis=1,
             )
 
@@ -97,7 +133,11 @@ class DataService:
             {
                 "crops": "crop",
                 "crop yield": "crop",
+                "crop production": "crop",
+                "crop_yield": "crop",
                 "livestock yield": "livestock",
+                "livestock production": "livestock",
+                "lvst_yield": "livestock",
                 "animals": "livestock",
             }
         )
