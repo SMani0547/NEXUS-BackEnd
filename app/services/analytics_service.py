@@ -115,10 +115,66 @@ class AnalyticsService:
         tokens = question.casefold()
         countries = [c for c in self.countries() if c.casefold() in tokens]
         products = [p for p in self.products() if p.casefold() in tokens]
+        product_types = [
+            product_type
+            for product_type in self._sorted_unique("type")
+            if product_type.casefold() in tokens
+        ]
+        years = self._sorted_unique("year")
+        latest_year = max(years) if years else None
+        country_profiles = []
+        for country in countries[:3]:
+            profile = self.country_profile(country)
+            country_profiles.append(
+                {
+                    "country": profile["country"],
+                    "years_available": {
+                        "min": min(profile["years_available"]) if profile["years_available"] else None,
+                        "max": max(profile["years_available"]) if profile["years_available"] else None,
+                        "count": len(profile["years_available"]),
+                    },
+                    "available_crop_products": profile["available_crop_products"][:12],
+                    "available_livestock_products": profile["available_livestock_products"][:12],
+                    "latest_values": profile["latest_values"][:8],
+                    "trend_summaries": sorted(
+                        profile["trend_summaries"],
+                        key=lambda item: abs(item["change_percent"] or 0),
+                        reverse=True,
+                    )[:8],
+                }
+            )
+
+        trend_snapshots = []
+        for country in countries[:3]:
+            for product in products[:4]:
+                trend = self.trend(country, product)
+                snapshot = self._compact_trend(trend)
+                if snapshot:
+                    trend_snapshots.append(snapshot)
+
+        product_comparisons = []
+        if latest_year is not None:
+            for product in products[:4]:
+                comparison = self.comparison(product, latest_year)
+                product_comparisons.append(
+                    {
+                        "product": comparison["product"],
+                        "type": comparison["type"],
+                        "year": comparison["year"],
+                        "top_countries": comparison["countries"][:8],
+                    }
+                )
+
         return {
             "matched_countries": countries,
             "matched_products": products,
+            "matched_product_types": product_types,
             "summary": self.summary(),
+            "year_range": {"min": min(years), "max": max(years)} if years else None,
+            "country_profiles": country_profiles,
+            "trend_snapshots": trend_snapshots,
+            "product_comparisons_latest_year": product_comparisons,
+            "general_insights": self.insights(products[0] if products else "", min(years) if years else None, latest_year),
         }
 
     def data_rows(self, type_filter: str | None = None, country: str | None = None, product: str | None = None, year_min: int | None = None, year_max: int | None = None) -> list[dict[str, Any]]:
@@ -250,6 +306,32 @@ class AnalyticsService:
             return data
         return data[data["type"].str.casefold() == product_type.casefold()]
 
+    def _compact_trend(self, trend: dict[str, Any]) -> dict[str, Any] | None:
+        series = trend.get("series", [])
+        if not series:
+            return None
+
+        first = series[0]
+        latest = series[-1]
+        first_value = float(first["value"]) if first.get("value") is not None else None
+        latest_value = float(latest["value"]) if latest.get("value") is not None else None
+        change_percent = None
+        if first_value and latest_value is not None:
+            change_percent = round(((latest_value - first_value) / first_value) * 100, 2)
+
+        return {
+            "country": trend.get("country"),
+            "product": trend.get("product"),
+            "type": trend.get("type"),
+            "unit": trend.get("unit"),
+            "first_year": first.get("year"),
+            "first_value": first_value,
+            "latest_year": latest.get("year"),
+            "latest_value": latest_value,
+            "change_percent": change_percent,
+            "sample_count": len(series),
+        }
+
     def _nunique(self, column: str) -> int:
         return int(self.data[column].nunique()) if column in self.data and not self.data.empty else 0
 
@@ -261,4 +343,3 @@ class AnalyticsService:
 
     def _records(self, frame: pd.DataFrame) -> list[dict[str, Any]]:
         return frame.where(pd.notnull(frame), None).to_dict(orient="records")
-
