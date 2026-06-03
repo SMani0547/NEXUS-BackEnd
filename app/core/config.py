@@ -20,6 +20,7 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("GEMINI_API_KEY", "GOOGLE_API_KEY"),
     )
     gemini_model: str = "gemini-2.5-flash"
+    ai_log_path: Path = Path("app/data/ai_interactions.csv")
 
     model_config = SettingsConfigDict(
         env_file=".env",
