@@ -172,4 +172,5 @@ class AskRequest(BaseModel):
 class AskResponse(BaseModel):
     answer: str
     note: str
+    suggested_questions: list[str] = []
     data_context: dict[str, Any] | None = None
