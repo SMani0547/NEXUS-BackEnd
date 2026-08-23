@@ -142,6 +142,87 @@ class HeatmapResponse(BaseModel):
     countries: list[str]
     products: list[str]
     cells: list[HeatmapCell]
+    type: str | None = None
+
+
+class YearHeatmapCell(BaseModel):
+    year: int
+    avg_yield: float | None
+    country: str | None = None
+    product: str | None = None
+
+
+class YearHeatmapResponse(BaseModel):
+    product: str | None
+    type: str | None
+    axis: str
+    years: list[int]
+    countries: list[str]
+    products: list[str]
+    cells: list[YearHeatmapCell]
+
+
+# ---------------------------------------------------------------------------
+# Type summary / multi-trends / rankings
+# ---------------------------------------------------------------------------
+
+class TypeTopProduct(BaseModel):
+    product: str
+    avg_yield: float
+
+
+class TypeBlock(BaseModel):
+    product_count: int
+    record_count: int
+    avg_yield: float | None
+    unit: str | None
+    top_products: list[TypeTopProduct]
+
+
+class CoverageRow(BaseModel):
+    country: str
+    year_min: int
+    year_max: int
+    record_count: int
+
+
+class TypeSummaryResponse(BaseModel):
+    year_range: YearRange | None
+    total_countries: int
+    total_records: int
+    types: dict[str, TypeBlock]
+    coverage: list[CoverageRow]
+
+
+class MultiTrendPoint(BaseModel):
+    year: int
+    value: float | None
+
+
+class MultiTrendSeries(BaseModel):
+    country: str
+    points: list[MultiTrendPoint]
+
+
+class MultiTrendsResponse(BaseModel):
+    product: str
+    type: str | None
+    unit: str | None
+    series: list[MultiTrendSeries]
+
+
+class RankingItem(BaseModel):
+    product: str
+    type: str
+    avg_yield: float | None
+    country_count: int
+    record_count: int
+
+
+class RankingsResponse(BaseModel):
+    type: str | None
+    year: int | None
+    products: list[RankingItem]
 
 
 # ---------------------------------------------------------------------------

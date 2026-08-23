@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from pathlib import Path
 
-from app.api.routes import ask, comparison, countries, country_profile, filters, health, products, summary, trends, data, heatmap, insights
+from app.api.routes import ask, comparison, countries, country_profile, filters, health, products, summary, trends, data, heatmap, insights, type_summary, multi_trends, rankings
 from app.core.config import get_settings
 
 settings = get_settings()
@@ -43,4 +43,7 @@ app.include_router(ask.router, prefix=settings.api_prefix)
 app.include_router(data.router, prefix=settings.api_prefix)
 app.include_router(heatmap.router, prefix=settings.api_prefix)
 app.include_router(insights.router, prefix=settings.api_prefix)
+app.include_router(type_summary.router, prefix=settings.api_prefix)
+app.include_router(multi_trends.router, prefix=settings.api_prefix)
+app.include_router(rankings.router, prefix=settings.api_prefix)
 

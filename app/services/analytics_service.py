@@ -192,26 +192,189 @@ class AnalyticsService:
             
         return self._records(df)
 
-    def heatmap(self) -> dict[str, Any]:
-        countries = self._sorted_unique("country")[:10]
-        products = self._sorted_unique("product")[:10]
-        
-        cells = []
-        for c in countries:
-            for p in products:
-                subset = self.data[(self.data["country"] == c) & (self.data["product"] == p)]
-                avg_yield = float(subset["yield"].mean()) if not subset.empty else None
-                record_count = len(subset)
-                cells.append({
-                    "country": c,
-                    "product": p,
-                    "avg_yield": avg_yield,
-                    "record_count": record_count
-                })
+    def type_summary(self) -> dict[str, Any]:
+        years = self._sorted_unique("year")
+        types: dict[str, Any] = {}
+        for product_type in ("crop", "livestock"):
+            subset = self.data[self.data["type"] == product_type] if not self.data.empty else self.data
+            top = (
+                subset.groupby("product")["yield"].mean().sort_values(ascending=False).head(5)
+                if not subset.empty
+                else pd.Series(dtype=float)
+            )
+            types[product_type] = {
+                "product_count": int(subset["product"].nunique()) if not subset.empty else 0,
+                "record_count": int(len(subset)),
+                "avg_yield": float(subset["yield"].mean()) if not subset.empty else None,
+                "unit": subset["unit"].mode().iloc[0] if not subset.empty and not subset["unit"].mode().empty else None,
+                "top_products": [{"product": name, "avg_yield": float(value)} for name, value in top.items()],
+            }
+
+        coverage = (
+            self.data.groupby("country", as_index=False)
+            .agg(year_min=("year", "min"), year_max=("year", "max"), record_count=("year", "size"))
+            .sort_values("country")
+            if not self.data.empty
+            else pd.DataFrame(columns=["country", "year_min", "year_max", "record_count"])
+        )
+
         return {
+            "year_range": {"min": min(years), "max": max(years)} if years else None,
+            "total_countries": self._nunique("country"),
+            "total_records": int(len(self.data)),
+            "types": types,
+            "coverage": self._records(coverage),
+        }
+
+    def multi_country_trend(
+        self,
+        product: str,
+        countries: list[str] | None = None,
+        year_min: int | None = None,
+        year_max: int | None = None,
+        product_type: str | None = None,
+    ) -> dict[str, Any]:
+        data = self._filter_type(self.data, product_type)
+        data = data[data["product"].str.casefold() == product.casefold()]
+        if year_min is not None:
+            data = data[data["year"] >= year_min]
+        if year_max is not None:
+            data = data[data["year"] <= year_max]
+        if countries:
+            wanted = {country.casefold() for country in countries if country}
+            data = data[data["country"].str.casefold().isin(wanted)]
+
+        if data.empty:
+            return {"product": product, "type": product_type, "unit": None, "series": []}
+
+        grouped = (
+            data.groupby(["country", "year"], as_index=False)["yield"]
+            .mean()
+            .sort_values(["country", "year"])
+            .rename(columns={"yield": "value"})
+        )
+        series = [
+            {"country": country, "points": self._records(rows[["year", "value"]])}
+            for country, rows in grouped.groupby("country")
+        ]
+        return {
+            "product": data["product"].iloc[0],
+            "type": data["type"].iloc[0],
+            "unit": data["unit"].mode().iloc[0] if not data["unit"].mode().empty else "unknown",
+            "series": series,
+        }
+
+    def product_rankings(
+        self,
+        product_type: str | None = None,
+        year: int | None = None,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        data = self._filter_type(self.data, product_type)
+        if year is not None:
+            data = data[data["year"] == year]
+        if data.empty:
+            return {"type": product_type, "year": year, "products": []}
+
+        ranked = (
+            data.groupby(["product", "type"], as_index=False)
+            .agg(avg_yield=("yield", "mean"), country_count=("country", "nunique"), record_count=("yield", "size"))
+            .sort_values("avg_yield", ascending=False)
+            .head(max(1, limit))
+        )
+        return {"type": product_type, "year": year, "products": self._records(ranked)}
+
+    def heatmap(self) -> dict[str, Any]:
+        return self.enhanced_heatmap(limit_countries=10, limit_products=10)
+
+    def enhanced_heatmap(
+        self,
+        product_type: str | None = None,
+        limit_countries: int = 20,
+        limit_products: int = 20,
+    ) -> dict[str, Any]:
+        data = self._filter_type(self.data, product_type)
+        if data.empty:
+            return {"type": product_type, "countries": [], "products": [], "cells": []}
+
+        countries = data["country"].value_counts().head(max(1, limit_countries)).index.tolist()
+        products = data["product"].value_counts().head(max(1, limit_products)).index.tolist()
+        subset = data[data["country"].isin(countries) & data["product"].isin(products)]
+        grouped = subset.groupby(["country", "product"], as_index=False).agg(
+            avg_yield=("yield", "mean"),
+            record_count=("yield", "size"),
+        )
+        lookup = {(row["country"], row["product"]): row for row in self._records(grouped)}
+        cells = []
+        for country in countries:
+            for product in products:
+                row = lookup.get((country, product))
+                cells.append(
+                    {
+                        "country": country,
+                        "product": product,
+                        "avg_yield": row["avg_yield"] if row else None,
+                        "record_count": int(row["record_count"]) if row else 0,
+                    }
+                )
+        return {
+            "type": product_type,
             "countries": countries,
             "products": products,
-            "cells": cells
+            "cells": cells,
+        }
+
+    def year_heatmap(self, product: str | None = None, product_type: str | None = None) -> dict[str, Any]:
+        data = self._filter_type(self.data, product_type)
+        resolved_product = None
+        if product:
+            data = data[data["product"].str.casefold() == product.casefold()]
+            resolved_product = data["product"].iloc[0] if not data.empty else product
+
+        if data.empty:
+            return {
+                "product": resolved_product,
+                "type": product_type,
+                "axis": "year_country" if product else "year_product",
+                "years": [],
+                "countries": [],
+                "products": [],
+                "cells": [],
+            }
+
+        if product:
+            grouped = (
+                data.groupby(["year", "country"], as_index=False)["yield"]
+                .mean()
+                .rename(columns={"yield": "avg_yield"})
+            )
+            years = self._sorted_unique("year", data)
+            countries = self._sorted_unique("country", data)
+            return {
+                "product": resolved_product,
+                "type": data["type"].iloc[0],
+                "axis": "year_country",
+                "years": years,
+                "countries": countries,
+                "products": [resolved_product] if resolved_product else [],
+                "cells": self._records(grouped),
+            }
+
+        grouped = (
+            data.groupby(["year", "product"], as_index=False)["yield"]
+            .mean()
+            .rename(columns={"yield": "avg_yield"})
+        )
+        years = self._sorted_unique("year", data)
+        products = self._sorted_unique("product", data)
+        return {
+            "product": None,
+            "type": product_type,
+            "axis": "year_product",
+            "years": years,
+            "countries": [],
+            "products": products,
+            "cells": self._records(grouped),
         }
 
     def insights(self, product: str, year_min: int | None = None, year_max: int | None = None) -> dict[str, Any]:
