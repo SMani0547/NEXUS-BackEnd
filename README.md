@@ -54,6 +54,7 @@ Common alternatives such as `area`, `item`, `commodity`, `value`, and `units` ar
 
 ## Endpoints
 
+- `GET /health`
 - `GET /api/health`
 - `GET /api/summary`
 - `GET /api/countries`
@@ -72,6 +73,20 @@ Example `POST /api/ask` body:
   "question": "How has Fiji taro changed over time?"
 }
 ```
+
+## Render Keep-Alive
+
+The backend exposes `GET /health` as a lightweight health endpoint for Render checks
+and external uptime pingers. Use:
+
+```text
+https://your-render-service.onrender.com/health
+```
+
+To reduce free-tier cold starts, configure an external cron or uptime monitor to send
+a `GET` request to that URL about every 5 minutes. Render free web services can still
+restart or hit monthly free-hour limits, so this is best for demos and class projects,
+not production uptime.
 
 ## Frontend Integration
 

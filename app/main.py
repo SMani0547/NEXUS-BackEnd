@@ -26,11 +26,14 @@ app.add_middleware(
 # Mount static files
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
+
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
 def read_root():
     html_path = Path("app/static/index.html")
     return html_path.read_text(encoding="utf-8")
 
+
+app.include_router(health.router)
 app.include_router(health.router, prefix=settings.api_prefix)
 app.include_router(summary.router, prefix=settings.api_prefix)
 app.include_router(countries.router, prefix=settings.api_prefix)
